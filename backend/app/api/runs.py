@@ -95,12 +95,20 @@ async def run_events(
         nonlocal after_seq
         queue = broker.subscribe_run(run_id)
         try:
-            history = await service.list_run_events(user_id, run_id, after_seq)
-            for item in history:
-                after_seq = item.seq
-                yield sse(item.seq, item.event_type, item.payload)
             run = await service.get_run(user_id, run_id)
-            if run.status in {"completed", "failed", "cancelled"}:
+            is_terminal = run.status in TERMINAL_STATUSES
+            is_active = runtime.is_run_active(run_id)
+            # An active task can commit its final status before persisting the terminal event.
+            # Check the full history in that window so reconnects can also detect prior delivery.
+            history_after = 0 if is_terminal and is_active else after_seq
+            history = await service.list_run_events(user_id, run_id, history_after)
+            for item in history:
+                if item.seq > after_seq:
+                    after_seq = item.seq
+                    yield sse(item.seq, item.event_type, item.payload)
+            if (is_terminal and not is_active) or any(
+                item.event_type in TERMINAL_EVENTS for item in history
+            ):
                 return
             while not await request.is_disconnected():
                 try:
