@@ -1,0 +1,37 @@
+[project]
+name = "memento-assistant-backend"
+version = "0.2.0"
+description = "Mature backend foundation for the local-first personal assistant"
+requires-python = ">=3.12"
+dependencies = [
+  "aiosqlite>=0.21,<1",
+  "alembic>=1.16,<2",
+  "duckduckgo-search>=7.0,<8",
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "pydantic>=2.9,<3",
+  "pydantic-settings>=2.10,<3",
+  "python-multipart>=0.0.20",
+  "sqlalchemy[asyncio]>=2.0.41,<3",
+  "tzdata>=2025.2; sys_platform == 'win32'",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.4,<9",
+  "pytest-asyncio>=1.1,<2",
+  "ruff>=0.12,<1",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+ignore = ["UP046"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"

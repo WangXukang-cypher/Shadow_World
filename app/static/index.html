@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>记得 · 本地个人助理</title>
+  <style>
+    :root { color-scheme: light; --bg:#f4f1ea; --panel:#fffdf8; --ink:#20231f; --muted:#74776f; --accent:#496c55; --line:#dedbd2; }
+    * { box-sizing:border-box } body { margin:0; font:15px/1.55 system-ui,sans-serif; background:var(--bg); color:var(--ink) }
+    .app { display:grid; grid-template-columns:240px minmax(0,1fr) 280px; height:100vh; gap:1px; background:var(--line) }
+    aside,main { background:var(--panel); min-width:0 } aside { padding:20px; overflow:auto } main { display:flex; flex-direction:column }
+    h1 { font-size:22px; margin:0 0 4px } h2 { font-size:14px; margin:24px 0 10px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em }
+    button,input { font:inherit } button { border:0; border-radius:10px; padding:10px 13px; cursor:pointer; background:var(--accent); color:white }
+    .secondary { background:#e8ebe5; color:var(--ink) } .list { display:grid; gap:8px } .item { padding:10px; border:1px solid var(--line); border-radius:10px; background:white }
+    .conversation { cursor:pointer } .conversation.active { border-color:var(--accent) }
+    .topbar { padding:18px 24px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between }
+    #messages { flex:1; overflow:auto; padding:24px; display:flex; flex-direction:column; gap:12px }
+    .message { max-width:76%; padding:11px 14px; border-radius:14px; white-space:pre-wrap }
+    .user { align-self:flex-end; background:var(--accent); color:white } .assistant { align-self:flex-start; background:#eceee8 }
+    .composer { padding:16px 24px 22px; border-top:1px solid var(--line); display:flex; gap:10px }
+    .composer input { flex:1; border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:white }
+    .status { color:var(--muted); font-size:13px } .notice { position:fixed; right:20px; top:20px; background:#20231f; color:white; padding:13px 16px; border-radius:10px; display:none }
+    @media (max-width:900px) { .app { grid-template-columns:190px 1fr } .right { display:none } }
+  </style>
+</head>
+<body>
+<div class="notice" id="notice"></div>
+<div class="app">
+  <aside>
+    <h1>记得</h1><div class="status">本地 Mock 初级版</div>
+    <p><button id="newChat">新建会话</button></p>
+    <div id="conversations" class="list"></div>
+  </aside>
+  <main>
+    <div class="topbar"><strong id="title">选择或新建会话</strong><span class="status" id="status">就绪</span></div>
+    <div id="messages"></div>
+    <form class="composer" id="composer"><input id="input" autocomplete="off" placeholder="试试：记住我喜欢简短回答"><button>发送</button></form>
+  </main>
+  <aside class="right">
+    <h2>记忆</h2><div id="memories" class="list"></div>
+    <h2>待办</h2><div id="tasks" class="list"></div>
+  </aside>
+</div>
+<script>
+let currentId = null;
+const $ = id => document.getElementById(id);
+async function api(url, options={}) { const r=await fetch(url,{headers:{'Content-Type':'application/json'},...options}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
+function message(role,text){ const el=document.createElement('div'); el.className=`message ${role}`; el.textContent=text; $('messages').append(el); $('messages').scrollTop=$('messages').scrollHeight; return el; }
+async function loadConversations(){ const items=await api('/api/v1/conversations'); $('conversations').innerHTML=''; items.forEach(x=>{const el=document.createElement('div');el.className='item conversation'+(x.id===currentId?' active':'');el.textContent=x.title||'新会话';el.onclick=()=>openConversation(x.id);$('conversations').append(el)}); }
+async function openConversation(id){ currentId=id; const c=await api(`/api/v1/conversations/${id}`); $('title').textContent=c.title||'新会话'; $('messages').innerHTML=''; c.messages.forEach(x=>message(x.role,x.content)); await loadConversations(); }
+async function newChat(){ const c=await api('/api/v1/conversations',{method:'POST'}); await loadConversations(); await openConversation(c.id); }
+async function refreshSide(){ const [mem,tasks]=await Promise.all([api('/api/v1/memories'),api('/api/v1/tasks')]); $('memories').innerHTML=mem.length?'':'<span class="status">暂无</span>'; mem.forEach(x=>{$('memories').insertAdjacentHTML('beforeend',`<div class="item"></div>`);$('memories').lastChild.textContent=x.content}); $('tasks').innerHTML=tasks.length?'':'<span class="status">暂无</span>';tasks.forEach(x=>{$('tasks').insertAdjacentHTML('beforeend','<div class="item"></div>');$('tasks').lastChild.textContent=x.title}); }
+$('newChat').onclick=newChat;
+$('composer').onsubmit=async e=>{e.preventDefault(); const text=$('input').value.trim(); if(!text)return; if(!currentId) await newChat(); $('input').value=''; message('user',text); $('status').textContent='处理中'; try { const run=await api(`/api/v1/conversations/${currentId}/messages`,{method:'POST',body:JSON.stringify({content:text})}); const out=message('assistant',''); const events=new EventSource(`/api/v1/runs/${run.id}/events`); events.addEventListener('assistant.delta',e=>{out.textContent+=JSON.parse(e.data).text}); events.addEventListener('run.completed',async()=>{events.close();$('status').textContent='就绪';await Promise.all([loadConversations(),refreshSide()])}); events.addEventListener('run.failed',e=>{events.close();out.textContent=JSON.parse(e.data).message;$('status').textContent='失败'}); } catch(err){message('assistant','请求失败：'+err.message);$('status').textContent='失败'} };
+const notifications=new EventSource('/api/v1/notifications/stream'); notifications.addEventListener('task.reminder',e=>{const n=JSON.parse(e.data);$('notice').textContent='提醒：'+n.payload.title;$('notice').style.display='block';setTimeout(()=>$('notice').style.display='none',5000);refreshSide()});
+(async()=>{await loadConversations();await refreshSide();const list=await api('/api/v1/conversations');if(list[0])await openConversation(list[0].id);})();
+</script>
+</body>
+</html>
