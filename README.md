@@ -1,5 +1,7 @@
 # Shadow World（影伴）
 
+[English](README.en.md) · 简体中文
+
 > 一个可自定义人格、支持群聊接力与长期记忆的本地优先 AI 社交空间。
 
 [![CI](https://github.com/WangXukang-cypher/Shadow_World/actions/workflows/ci.yml/badge.svg)](https://github.com/WangXukang-cypher/Shadow_World/actions/workflows/ci.yml)
@@ -13,6 +15,8 @@ Shadow World 不只是一个问答助手。你可以创建多个拥有独立性�
 > 项目仍处于早期开发阶段，当前更适合本机开发、演示和可信内网体验。尚未提供正式账号鉴权与 API Key 加密存储，请勿将服务直接暴露到公网。
 
 ## 界面预览
+
+截图展示 AI 角色生成的对话，部分名字已遮挡。
 
 ### 多人格群聊与自动接力
 
